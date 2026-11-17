@@ -1,0 +1,85 @@
+# Network layout
+#
+#   backend  (internal: no route to the internet or the host)
+#     ├── agent      ← only on this network: can reach influxdb and ollama, nothing else
+#     ├── influxdb
+#     └── ollama
+#   default  (normal Docker network with internet)
+#     ├── influxdb   ← to publish the web UI on localhost:8086
+#     └── ollama     ← to download models (`ollama pull`)
+#
+# To give the agent internet access (Claude API, or Ollama on the host), add the override file:
+#   docker compose -f docker-compose.yml -f docker-compose.cloud.yml run --rm agent ...
+
+services:
+  influxdb:
+    image: influxdb:2.7
+    container_name: tsagent-influxdb
+    ports:
+      - "127.0.0.1:8086:8086"          # localhost only, not reachable from your local network
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUX_ADMIN_USER:-haozhang}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_ADMIN_PASSWORD:-tsagent*}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG:-tsagent}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_BUCKET:-eeg}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN:-dev-token-change-me}
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+      - influxdb-config:/etc/influxdb2
+    networks: [default, backend]
+
+  ollama:
+    image: ollama/ollama             # pin a version tag (e.g. ollama/ollama:0.x.y) for reproducible experiments
+    container_name: tsagent-ollama
+    # No published port: the agent reaches it as http://ollama:11434 on the internal network,
+    # and this avoids clashing with an Ollama installed directly on the host (also port 11434).
+    volumes:
+      - ollama-models:/root/.ollama  # models persist here (several GB each)
+    networks: [default, backend]
+    # NVIDIA GPU: works with Docker Engine + nvidia-container-toolkit, not with Docker Desktop.
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices: [{ driver: nvidia, count: all, capabilities: [gpu] }]
+
+  agent:
+    build: .
+    image: tsagent-agent
+    profiles: [agent]                # not started by `docker compose up`; use `docker compose run`
+    depends_on: [influxdb, ollama]
+    networks: [backend]              # internal only: no internet
+    # Only the variables the agent needs. The InfluxDB admin password and any API key stay out.
+    environment:
+      INFLUX_URL: http://influxdb:8086
+      INFLUX_TOKEN: ${INFLUX_TOKEN:-dev-token-change-me}
+      INFLUX_ORG: ${INFLUX_ORG:-tsagent}
+      INFLUX_BUCKET: ${INFLUX_BUCKET:-eeg}
+      TSAGENT_SUBJECT: ${TSAGENT_SUBJECT:-me}
+      TSAGENT_CHANNEL: ${TSAGENT_CHANNEL:-EEG}
+      TSAGENT_TZ: ${TSAGENT_TZ:-UTC}
+      TSAGENT_STAGER: ${TSAGENT_STAGER:-yasa}
+      TSAGENT_LLM: ollama
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
+    volumes:
+      - ./tsagent:/app/tsagent:ro                       # code, read-only (edits apply without a rebuild)
+      - ./experiments/prompts:/app/experiments/prompts:ro
+      - ./experiments/runs:/app/experiments/runs        # traces and flow reports are written here
+      - ./experiments/tasks:/app/experiments/tasks:ro   # batch task files (one question per .txt)
+      - ./experiments/results:/app/experiments/results  # batch JSON results are written here
+      - ./reports:/app/reports
+    # Hardening: no writes outside the mounts above, no Linux capabilities, no privilege escalation.
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+networks:
+  backend:
+    internal: true
+
+volumes:
+  influxdb-data:
+  influxdb-config:
+  ollama-models:

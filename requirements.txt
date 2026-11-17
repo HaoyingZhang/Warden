@@ -1,0 +1,10 @@
+anthropic>=2.5.0
+httpx>=0.27            # HTTP requests to Ollama and the InfluxDB query API (used directly by tsagent)
+influxdb-client>=1.50.0
+mne>=1.12
+yasa>=0.7.0
+numpy>=2.0
+scipy>=1.13
+pandas>=2.2
+python-dotenv>=1.0
+pytest>=8.0

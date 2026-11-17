@@ -1,0 +1,13 @@
+# Override: give the agent internet access to use Claude (Anthropic API).
+#   docker compose -f docker-compose.yml -f docker-compose.cloud.yml run --rm agent experiment ...
+#
+# This removes the "no internet" isolation: the agent can then reach any address, and everything
+# sent to the LLM leaves your machine. Use it to compare a cloud LLM against the local one.
+
+services:
+  agent:
+    networks: [default, backend]
+    environment:
+      TSAGENT_LLM: anthropic
+      TSAGENT_MODEL: ${TSAGENT_MODEL:-claude-opus-5-5}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env to use the cloud backend}
