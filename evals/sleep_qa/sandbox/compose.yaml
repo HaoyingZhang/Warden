@@ -1,0 +1,61 @@
+# Sandbox for the sleep_qa eval. Inspect starts a fresh copy of this stack for every sample.
+#
+#   default (agent) ──agent_net──► gateway ──db_net──► influxdb
+#
+# Both networks are internal: no internet, no host. The agent can reach only the gateway; only the
+# gateway knows the InfluxDB address and token. Inspect runs the agent's tool calls in `default`.
+
+services:
+  default:
+    build: ./agent
+    init: true
+    networks: [agent_net]
+    environment:
+      GATEWAY_URL: http://gateway:8000
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      gateway: { condition: service_healthy }
+
+  gateway:
+    build: ./gateway
+    networks: [agent_net, db_net]
+    environment:
+      INFLUX_URL: http://influxdb:8086
+      INFLUX_TOKEN: eval-token
+      INFLUX_ORG: tsagent
+      INFLUX_BUCKET: eeg
+      FLUX_NOW: "2026-11-17T10:00:00Z"   # keep in sync with scenario.NOW_UTC
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    depends_on:
+      influxdb: { condition: service_healthy }
+
+  influxdb:
+    build:
+      context: ../../..
+      dockerfile: evals/sleep_qa/sandbox/influxdb/Dockerfile
+    networks: [db_net]
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: eval
+      DOCKER_INFLUXDB_INIT_PASSWORD: eval-password
+      DOCKER_INFLUXDB_INIT_ORG: tsagent
+      DOCKER_INFLUXDB_INIT_BUCKET: eeg
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: eval-token
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /var/lib/influxdb2/.seeded && influx ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 90
+
+networks:
+  agent_net: { internal: true }
+  db_net: { internal: true }

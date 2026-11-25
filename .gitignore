@@ -1,3 +1,9 @@
 reports
 models
 .venv
+experiments/
+
+# Python caches and Inspect logs
+__pycache__/
+*.pyc
+logs/
