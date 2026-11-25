@@ -8,3 +8,7 @@ scipy>=1.13
 pandas>=2.2
 python-dotenv>=1.0
 pytest>=8.0
+inspect-ai==0.3.280
+agent-client-protocol>=0.12,<1.0   # inspect-ai 0.3.280 imports acp.helpers, removed in 1.0
+openai==3.59.0
+datasets
