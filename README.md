@@ -16,7 +16,6 @@ evals/
   sleep_qa/           the sleep-question eval (below)
   simpleqa/           SimpleQA factual-recall benchmark (sanity check for a model)
 tests/                pytest, no Docker or LLM needed
-scripts/notes/        scratch shell commands
 logs/                 Inspect eval logs (gitignored)
 ```
 
@@ -106,5 +105,5 @@ the dataset is out of date.
 ## simpleqa
 
 ```bash
-.venv/bin/inspect eval evals/simpleqa/task.py --model ollama/qwen2.5:7b-instruct-q4_K_M --limit 100
+.venv/bin/inspect eval evals/simpleqa/task.py --model ollama/qwen2.5:7b-instruct-q4_K_M --limit 20
 ```
